@@ -51,6 +51,7 @@
     .body { padding: 20px; }
     .title { display: flex; gap: 14px; align-items: center; }
     .title img { width: 56px; height: 56px; border-radius: 14px; flex: none; }
+    .title img.pixel { background: var(--chip); image-rendering: pixelated; }
     .title h2 { margin: 0; font-size: 1.25rem; }
     .chip {
       display: inline-block;
@@ -91,8 +92,7 @@
   <!--
     One <article> per app. data-app must match the app's id in downloads/versions.json, which its
     build workflow writes; until it has published once, the button shows "Coming soon".
-    For a Mac app, copy this block and use: chip "macOS · DMG", button "Download for Mac", href
-    downloads/<app>.dmg, and Mac install steps.
+    The screenshot (img.shot) is optional.
   -->
   <article class="app" data-app="swing-and-shoot">
     <img class="shot" src="images/swing-and-shoot.jpg" alt="Swing and Shoot gameplay: players swinging on ropes around a space station arena" width="960" height="540">
@@ -117,6 +117,39 @@
           <li>Open the downloaded file. The first time, Android asks you to allow
             <b>Install unknown apps</b> for your browser: allow it, then go back.</li>
           <li>Tap <b>Install</b>. New versions install over the old one and keep your settings.</li>
+        </ol>
+      </details>
+    </div>
+  </article>
+
+  <article class="app" data-app="ambient-pets">
+    <div class="body">
+      <div class="title">
+        <img class="pixel" src="icons/ambient-pets.png" alt="" width="56" height="56">
+        <div>
+          <h2>Ambient Pets</h2>
+          <span class="chip">macOS · DMG</span>
+        </div>
+      </div>
+      <p class="tagline">Pixel-art superhero pets that pop up on your desktop for short cameos, act together and
+        never steal focus. They stay away during meetings, presentations and full-screen apps. Lives in the
+        menu bar.</p>
+      <div class="actions">
+        <a class="button" href="downloads/ambient-pets.dmg" download>Download for Mac</a>
+        <span class="meta"></span>
+      </div>
+      <details>
+        <summary>How to install</summary>
+        <ol>
+          <li>Open the downloaded <b>ambient-pets.dmg</b> and drag <b>AmbientPets</b> into
+            <b>Applications</b>.</li>
+          <li>Open it from Applications. macOS says it can't check the app for malicious software, because
+            it isn't signed with a paid Apple Developer ID: click <b>Done</b>.</li>
+          <li>Open <b>System Settings ▸ Privacy &amp; Security</b>, scroll down and click <b>Open Anyway</b>
+            next to the AmbientPets message. You only do this once; the app then lives in the menu bar
+            (the ✨ icon).</li>
+          <li>Needs macOS 14 (Sonoma) or later, on Apple Silicon or Intel. To update, drag the new version
+            over the old one.</li>
         </ol>
       </details>
     </div>
