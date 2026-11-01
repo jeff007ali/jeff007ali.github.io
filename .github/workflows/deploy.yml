@@ -1,0 +1,57 @@
+# Deploys the download site to GitHub Pages: the page from `main`, plus the app files from the
+# `downloads` branch served under /downloads/.
+#
+# App repos (private) replace their file on the downloads branch and then send a `downloads-updated`
+# repository_dispatch, because a push to that branch can't start this workflow (it has no workflow file).
+#
+# One-time: Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
+
+name: Deploy site
+
+on:
+  push:
+    branches: [main]
+  repository_dispatch:
+    types: [downloads-updated]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: _site
+
+      - name: Add the app files from the downloads branch
+        run: |
+          if git -C _site ls-remote --exit-code --heads origin downloads >/dev/null; then
+            git -C _site fetch -q --depth 1 origin downloads
+            mkdir -p _site/downloads
+            git -C _site archive FETCH_HEAD | tar -x -C _site/downloads
+            ls -l _site/downloads
+          else
+            echo "No downloads branch yet: deploying the page only."
+          fi
+          rm -rf _site/.git _site/.github _site/README.md
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
