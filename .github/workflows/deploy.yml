@@ -4,6 +4,8 @@
 # App repos (private) replace their file on the downloads branch and then send a `downloads-updated`
 # repository_dispatch, because a push to that branch can't start this workflow (it has no workflow file).
 #
+# Each app version is also published as a release of this repo, only so GitHub counts its downloads.
+#
 # One-time: Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
 
 name: Deploy site
@@ -16,7 +18,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write  # creates the per-version releases that count downloads
   pages: write
   id-token: write
 
@@ -46,6 +48,37 @@ jobs:
             echo "No downloads branch yet: deploying the page only."
           fi
           rm -rf _site/.git _site/.github _site/README.md
+
+      - name: Release each new app version, for download counts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Pages keeps no download stats, but release assets have a download_count. So each app version
+          # in versions.json also becomes a release here (tag <app>-v<version>, holding the same file),
+          # the page's button links to that release asset, and the page reads the counts from the API.
+          # The deployed versions.json gets the asset's `url`; the page falls back to downloads/<file>.
+          V=_site/downloads/versions.json
+          [ -f "$V" ] || exit 0
+          for id in $(jq -r 'keys[]' "$V"); do
+            file="$(jq -r --arg id "$id" '.[$id].file' "$V")"
+            version="$(jq -r --arg id "$id" '.[$id].version' "$V")"
+            tag="${id}-v${version}"
+            size="$(stat -c %s "_site/downloads/${file}")"
+            if ! gh release view "$tag" -R "$REPO" >/dev/null 2>&1; then
+              gh release create "$tag" "_site/downloads/${file}" -R "$REPO" --target "$GITHUB_SHA" \
+                --title "${id} ${version}" --latest=false \
+                --notes "Download ${file} from https://jeff007ali.github.io"
+            elif [ "$(gh release view "$tag" -R "$REPO" --json assets \
+                     --jq ".assets[] | select(.name == \"${file}\") | .size")" != "$size" ]; then
+              # The same version was published again with a new build: replace the asset (its count
+              # starts over).
+              gh release upload "$tag" "_site/downloads/${file}" -R "$REPO" --clobber
+            fi
+            url="https://github.com/${REPO}/releases/download/${tag}/${file}"
+            jq --arg id "$id" --arg url "$url" '.[$id].url = $url' "$V" > "$V.tmp" && mv "$V.tmp" "$V"
+          done
+          cat "$V"
 
       - uses: actions/configure-pages@v5
 

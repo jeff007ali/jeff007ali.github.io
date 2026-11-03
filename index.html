@@ -79,6 +79,10 @@
     summary { cursor: pointer; font-weight: 600; }
     details ol { margin: 10px 0 0; padding-left: 20px; color: var(--muted); }
     details li + li { margin-top: 4px; }
+    .versions { list-style: none; margin: 10px 0 0; padding: 0; color: var(--muted); font-size: 0.9rem; }
+    .versions li { display: flex; justify-content: space-between; gap: 16px; padding: 4px 0; }
+    .versions li + li { margin-top: 0; border-top: 1px solid var(--line); }
+    .versions b { color: var(--text); font-weight: 600; }
     footer { margin-top: 32px; color: var(--muted); font-size: 0.85rem; }
   </style>
 </head>
@@ -155,32 +159,83 @@
     </div>
   </article>
 
-  <footer>Every download is the newest build, published automatically.</footer>
+  <footer>Every download is the newest build, published automatically.<span class="total"></span></footer>
 </main>
 
 <script>
   // Fill in version, date and size from downloads/versions.json; apps not in it aren't out yet.
+  // Download counts come from this repo's releases (tag <app>-v<version>), which the deploy workflow
+  // creates for every version; if GitHub's API is unreachable or rate-limited, counts are left out.
   const MB = 1024 * 1024;
-  fetch("downloads/versions.json", { cache: "no-store" })
-    .then((r) => (r.ok ? r.json() : {}))
-    .catch(() => ({}))
-    .then((versions) => {
-      for (const card of document.querySelectorAll("[data-app]")) {
-        const info = versions[card.dataset.app];
-        const button = card.querySelector(".button");
-        const meta = card.querySelector(".meta");
-        if (!info) {
-          button.textContent = "Coming soon";
-          button.setAttribute("aria-disabled", "true");
-          button.removeAttribute("href");
-          continue;
-        }
-        const date = new Date(info.date + "T00:00:00Z").toLocaleDateString(undefined, {
-          year: "numeric", month: "short", day: "numeric", timeZone: "UTC",
-        });
-        meta.textContent = `v${info.version} · ${date} · ${Math.round(info.size / MB)} MB`;
+  const REPO = "jeff007ali/jeff007ali.github.io";
+  const plural = (n) => `${n.toLocaleString()} download${n === 1 ? "" : "s"}`;
+
+  async function fetchReleases() {
+    const releases = [];
+    for (let page = 1; page <= 10; page++) {
+      const r = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=100&page=${page}`);
+      if (!r.ok) throw new Error(`releases: ${r.status}`);
+      const batch = await r.json();
+      releases.push(...batch);
+      if (batch.length < 100) break;
+    }
+    return releases;
+  }
+
+  // Newest first: [{ version, count }] for one app.
+  function countsFor(app, releases) {
+    const prefix = `${app}-v`;
+    return releases
+      .filter((rel) => rel.tag_name.startsWith(prefix))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .map((rel) => ({
+        version: rel.tag_name.slice(prefix.length),
+        count: rel.assets.reduce((sum, asset) => sum + asset.download_count, 0),
+      }));
+  }
+
+  Promise.all([
+    fetch("downloads/versions.json", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : {}))
+      .catch(() => ({})),
+    fetchReleases().catch(() => null),
+  ]).then(([versions, releases]) => {
+    let siteTotal = 0;
+    for (const card of document.querySelectorAll("[data-app]")) {
+      const info = versions[card.dataset.app];
+      const button = card.querySelector(".button");
+      const meta = card.querySelector(".meta");
+      if (!info) {
+        button.textContent = "Coming soon";
+        button.setAttribute("aria-disabled", "true");
+        button.removeAttribute("href");
+        continue;
       }
-    });
+      if (info.url) button.href = info.url;
+      const date = new Date(info.date + "T00:00:00Z").toLocaleDateString(undefined, {
+        year: "numeric", month: "short", day: "numeric", timeZone: "UTC",
+      });
+      meta.textContent = `v${info.version} · ${date} · ${Math.round(info.size / MB)} MB`;
+
+      const counts = releases ? countsFor(card.dataset.app, releases) : [];
+      if (!counts.length) continue;
+      const total = counts.reduce((sum, c) => sum + c.count, 0);
+      siteTotal += total;
+      meta.textContent += ` · ${plural(total)}`;
+
+      const details = document.createElement("details");
+      details.innerHTML = "<summary>Downloads by version</summary><ul class=\"versions\"></ul>";
+      for (const { version, count } of counts) {
+        const li = document.createElement("li");
+        li.innerHTML = "<span></span><b></b>";
+        li.firstChild.textContent = `v${version}${version === info.version ? " (latest)" : ""}`;
+        li.lastChild.textContent = count.toLocaleString();
+        details.lastChild.append(li);
+      }
+      card.querySelector(".body").append(details);
+    }
+    if (releases?.length) document.querySelector(".total").textContent = ` ${plural(siteTotal)} in all.`;
+  });
 </script>
 </body>
 </html>
